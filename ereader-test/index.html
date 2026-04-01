@@ -44,19 +44,19 @@
     .btn-remove { background: #e94560; color: #fff; }
     
     /* Reader View */
-    .reader-container { display: flex; flex-direction: column; height: calc(100vh - 80px); }
-    .reader-toolbar { background: #16213e; padding: 1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; border-bottom: 1px solid #0f3460; }
-    .reader-toolbar button { background: #0f3460; border: none; color: #fff; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; }
+    .reader-container { display: flex; flex-direction: column; height: 100vh; width: 100%; }
+    .reader-toolbar { background: #16213e; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; border-bottom: 1px solid #0f3460; flex-shrink: 0; }
+    .reader-toolbar button { background: #0f3460; border: none; color: #fff; padding: 0.4rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
     .reader-toolbar button:hover { background: #e94560; }
-    .reader-toolbar input { background: #0f3460; border: 1px solid #0f3460; color: #fff; padding: 0.5rem; border-radius: 6px; width: 80px; text-align: center; }
-    .reader-title { flex: 1; text-align: center; font-weight: 600; color: #e94560; }
+    .reader-toolbar input { background: #0f3460; border: 1px solid #0f3460; color: #fff; padding: 0.4rem; border-radius: 6px; width: 60px; text-align: center; font-size: 0.85rem; }
+    .reader-title { flex: 1; text-align: center; font-weight: 600; color: #e94560; font-size: 0.9rem; }
     .chapter-nav { display: flex; gap: 0.5rem; align-items: center; }
-    .chapter-nav select { background: #0f3460; border: none; color: #fff; padding: 0.5rem; border-radius: 6px; min-width: 150px; }
+    .chapter-nav select { background: #0f3460; border: none; color: #fff; padding: 0.4rem; border-radius: 6px; min-width: 150px; font-size: 0.85rem; }
     
-    .reader-main { flex: 1; display: flex; overflow: hidden; }
+    .reader-main { flex: 1; display: flex; overflow: hidden; min-height: 0; }
     
     /* Sidebar - Table of Contents */
-    .toc-sidebar { width: 280px; background: #16213e; border-right: 1px solid #0f3460; overflow-y: auto; padding: 1rem; transition: margin-left 0.3s; }
+    .toc-sidebar { width: 280px; background: #16213e; border-right: 1px solid #0f3460; overflow-y: auto; padding: 1rem; transition: margin-left 0.3s; flex-shrink: 0; }
     .toc-sidebar.hidden { margin-left: -280px; }
     .toc-sidebar h3 { font-size: 1rem; margin-bottom: 1rem; color: #e94560; }
     .toc-item { padding: 0.5rem; border-radius: 4px; cursor: pointer; margin-bottom: 0.25rem; font-size: 0.85rem; transition: background 0.2s; }
@@ -64,15 +64,15 @@
     .toc-item.active { background: #e94560; color: #fff; }
     
     /* Book Content Area */
-    .reader-content { flex: 1; overflow-y: auto; padding: 2rem; background: #0f0f1a; }
-    .reader-content-inner { max-width: 700px; margin: 0 auto; line-height: 1.8; font-size: 1.1rem; }
+    .reader-content { flex: 1; overflow-y: auto; background: #0f0f1a; display: flex; align-items: flex-start; justify-content: center; }
+    .reader-content-inner { max-width: 800px; width: 100%; padding: 2rem; line-height: 1.8; font-size: 1.1rem; }
     .reader-content-inner p { margin-bottom: 1rem; }
     
     /* Page Navigation */
-    .page-nav { background: #16213e; padding: 1rem; display: flex; justify-content: center; align-items: center; gap: 2rem; border-top: 1px solid #0f3460; }
-    .page-nav button { background: #e94560; border: none; color: #fff; padding: 0.75rem 2rem; border-radius: 8px; cursor: pointer; font-size: 1rem; }
+    .page-nav { background: #16213e; padding: 0.75rem 1rem; display: flex; justify-content: center; align-items: center; gap: 2rem; border-top: 1px solid #0f3460; flex-shrink: 0; }
+    .page-nav button { background: #e94560; border: none; color: #fff; padding: 0.6rem 1.5rem; border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
     .page-nav button:disabled { opacity: 0.4; cursor: not-allowed; }
-    .page-nav span { font-size: 0.9rem; color: #888; }
+    .page-nav span { font-size: 0.85rem; color: #888; }
     
     /* Loading / Empty States */
     .loading, .empty-state { text-align: center; padding: 4rem; color: #888; }
