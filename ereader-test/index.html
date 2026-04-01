@@ -209,6 +209,8 @@ let chapters = [];
 // OpenLibrary API
 const OL_API = 'https://openlibrary.org';
 const OL_COVER = 'https://covers.openlibrary.org/b';
+// CORS proxy for API requests (browser-side)
+const CORS_PROXY = 'https://corsproxy.io/?';
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -240,7 +242,8 @@ async function searchBooks() {
   container.innerHTML = '<div class="loading">Searching OpenLibrary...</div>';
   
   try {
-    const res = await fetch(`${OL_API}/search.json?q=${encodeURIComponent(query)}&limit=20&fields=key,title,author_name,cover_i,first_publish_year,number_of_pages_median,subject,ia,cover_edition_key`);
+    const res = await fetch(`${CORS_PROXY}${encodeURIComponent(OL_API + '/search.json?q=' + query + '&limit=20&fields=key,title,author_name,cover_i,first_publish_year,number_of_pages_median,subject,ia,cover_edition_key')}`);
+    if (!res.ok) throw new Error('Search failed');
     const data = await res.json();
     
     searchResults = data.docs || [];
@@ -257,7 +260,7 @@ async function searchBooks() {
       grid.appendChild(createBookCard(book, 'search'));
     }
   } catch (err) {
-    container.innerHTML = '<div class="empty-state"><h3>Search failed</h3><p>Please try again</p></div>';
+    container.innerHTML = '<div class="empty-state"><h3>Search failed</h3><p>OpenLibrary may be temporarily unavailable. Try again later.</p></div>';
   }
 }
 
@@ -304,7 +307,7 @@ async function showBookModal(book, source) {
   let desc = '';
   if (book.key) {
     try {
-      const res = await fetch(`${OL_API}${book.key}.json`);
+      const res = await fetch(`${CORS_PROXY}${encodeURIComponent(OL_API + book.key + '.json')}`);
       const data = await res.json();
       desc = data.description ? (typeof data.description === 'string' ? data.description : data.description.value) : '';
     } catch {}
@@ -397,7 +400,7 @@ async function loadBookContent(book) {
   } else if (book.cover_edition_key) {
     // Try to get IA from edition
     try {
-      const res = await fetch(`${OL_API}/books/${book.cover_edition_key}.json`);
+      const res = await fetch(`${CORS_PROXY}${encodeURIComponent(OL_API + '/books/' + book.cover_edition_key + '.json')}`);
       const data = await res.json();
       iaId = data.identifiers?.internetarchive?.[0] || data.identifiers?.archiveorg?.[0];
     } catch {}
@@ -414,7 +417,7 @@ async function loadBookContent(book) {
     
     try {
       // Get work details for preview
-      const workRes = await fetch(`${OL_API}${book.key}.json`);
+      const workRes = await fetch(`${CORS_PROXY}${encodeURIComponent(OL_API + book.key + '.json')}`);
       const workData = await workRes.json();
       
       // Check for first representative edition with full text
