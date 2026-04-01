@@ -211,6 +211,8 @@ const OL_API = 'https://openlibrary.org';
 const OL_COVER = 'https://covers.openlibrary.org/b';
 // CORS proxy for API requests (browser-side)
 const CORS_PROXY = 'https://corsproxy.io/?';
+// Google Books API (backup search)
+const GB_API = 'https://www.googleapis.com/books/v1/volumes';
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -239,34 +241,69 @@ async function searchBooks() {
   if (!query) return;
   
   const container = document.getElementById('search-results');
-  container.innerHTML = '<div class="loading">Searching OpenLibrary...</div>';
+  container.innerHTML = '<div class="loading">Searching...</div>';
   
+  // Try OpenLibrary first
+  let success = false;
   try {
     const res = await fetch(`${CORS_PROXY}${encodeURIComponent(OL_API + '/search.json?q=' + query + '&limit=20&fields=key,title,author_name,cover_i,first_publish_year,number_of_pages_median,subject,ia,cover_edition_key')}`);
-    if (!res.ok) throw new Error('Search failed');
-    const data = await res.json();
-    
-    searchResults = data.docs || [];
-    
-    if (searchResults.length === 0) {
-      container.innerHTML = '<div class="empty-state"><h3>No results found</h3><p>Try a different search term</p></div>';
-      return;
+    if (res.ok) {
+      const data = await res.json();
+      searchResults = data.docs || [];
+      if (searchResults.length > 0) {
+        renderSearchResults();
+        success = true;
+      }
     }
-    
-    container.innerHTML = '<div class="book-grid" id="search-grid"></div>';
-    const grid = document.getElementById('search-grid');
-    
-    for (const book of searchResults) {
-      grid.appendChild(createBookCard(book, 'search'));
-    }
-  } catch (err) {
-    container.innerHTML = '<div class="empty-state"><h3>Search failed</h3><p>OpenLibrary may be temporarily unavailable. Try again later.</p></div>';
+  } catch {}
+  
+  // Fallback to Google Books if OpenLibrary failed
+  if (!success) {
+    try {
+      const res = await fetch(`${GB_API}?q=${encodeURIComponent(query)}&maxResults=20`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.items) {
+          searchResults = data.items.map(item => ({
+            key: item.id,
+            title: item.volumeInfo.title,
+            author_name: item.volumeInfo.authors || ['Unknown'],
+            cover_i: null,
+            cover_edition_key: null,
+            first_publish_year: item.volumeInfo.publishedDate?.split('-')[0],
+            number_of_pages_median: item.volumeInfo.pageCount,
+            subject: item.volumeInfo.categories || [],
+            gb_id: item.id
+          }));
+          renderSearchResults();
+          success = true;
+        }
+      }
+    } catch {}
+  }
+  
+  if (!success || searchResults.length === 0) {
+    container.innerHTML = '<div class="empty-state"><h3>No results found</h3><p>OpenLibrary and Google Books may be temporarily unavailable.</p></div>';
+  }
+}
+
+function renderSearchResults() {
+  const container = document.getElementById('search-results');
+  container.innerHTML = '<div class="book-grid" id="search-grid"></div>';
+  const grid = document.getElementById('search-grid');
+  for (const book of searchResults) {
+    grid.appendChild(createBookCard(book, 'search'));
   }
 }
 
 function createBookCard(book, source) {
-  const isSaved = savedBooks.some(b => b.key === book.key);
-  const coverUrl = book.cover_i ? `${OL_COVER}/id/${book.cover_i}-M.jpg` : null;
+  const isSaved = savedBooks.some(b => b.key === book.key || b.gb_id === book.gb_id);
+  let coverUrl = null;
+  if (book.cover_i) {
+    coverUrl = `${OL_COVER}/id/${book.cover_i}-M.jpg`;
+  } else if (book.gb_id) {
+    coverUrl = book.volumeInfo?.imageLinks?.thumbnail?.replace('http:', 'https:') || null;
+  }
   
   const div = document.createElement('div');
   div.className = 'book-card';
