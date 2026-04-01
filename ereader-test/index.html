@@ -273,7 +273,10 @@ async function searchBooks() {
             first_publish_year: item.volumeInfo.publishedDate?.split('-')[0],
             number_of_pages_median: item.volumeInfo.pageCount,
             subject: item.volumeInfo.categories || [],
-            gb_id: item.id
+            gb_id: item.id,
+            gb_thumbnail: item.volumeInfo.imageLinks?.thumbnail?.replace('http:', 'https:') || item.volumeInfo.imageLinks?.smallThumbnail?.replace('http:', 'https:') || null,
+            gb_description: item.volumeInfo.description || '',
+            gb_info_link: item.volumeInfo.infoLink || ''
           }));
           renderSearchResults();
           success = true;
@@ -301,8 +304,10 @@ function createBookCard(book, source) {
   let coverUrl = null;
   if (book.cover_i) {
     coverUrl = `${OL_COVER}/id/${book.cover_i}-M.jpg`;
-  } else if (book.gb_id) {
-    coverUrl = book.volumeInfo?.imageLinks?.thumbnail?.replace('http:', 'https:') || null;
+  } else if (book.gb_thumbnail) {
+    coverUrl = book.gb_thumbnail;
+  } else if (book.gb_id && book.volumeInfo?.imageLinks?.thumbnail) {
+    coverUrl = book.volumeInfo.imageLinks.thumbnail.replace('http:', 'https:');
   }
   
   const div = document.createElement('div');
@@ -318,8 +323,8 @@ function createBookCard(book, source) {
       ${book.first_publish_year ? `<div class="book-author">First published: ${book.first_publish_year}</div>` : ''}
       <div class="book-actions" onclick="event.stopPropagation()">
         ${source === 'saved' 
-          ? `<button class="btn-remove" onclick="removeBook('${book.key}')">✕ Remove</button>`
-          : `<button class="btn-save" onclick="saveBook('${book.key}')">${isSaved ? '✓ Saved' : '+ Save'}</button>`
+          ? `<button class="btn-remove" onclick="removeBook('${book.key || book.gb_id}')">✕ Remove</button>`
+          : `<button class="btn-save" onclick="saveBook('${book.key || book.gb_id}')">${isSaved ? '✓ Saved' : '+ Save'}</button>`
         }
       </div>
     </div>
@@ -336,13 +341,21 @@ async function showBookModal(book, source) {
   document.getElementById('modal-pages').textContent = `Pages: ${book.number_of_pages_median || 'Unknown'}`;
   document.getElementById('modal-subjects').textContent = `Subjects: ${(book.subject || []).slice(0,3).join(', ')}`;
   
-  const coverUrl = book.cover_i ? `${OL_COVER}/id/${book.cover_i}-L.jpg` : null;
+  // Get cover - OpenLibrary or Google Books
+  let coverUrl = null;
+  if (book.cover_i) {
+    coverUrl = `${OL_COVER}/id/${book.cover_i}-L.jpg`;
+  } else if (book.gb_thumbnail) {
+    coverUrl = book.gb_thumbnail.replace('-M.jpg', '-L.jpg');
+  }
   document.getElementById('modal-cover').src = coverUrl || '';
   document.getElementById('modal-cover').style.display = coverUrl ? 'block' : 'none';
   
-  // Get description
+  // Get description - try Google Books first, then OpenLibrary
   let desc = '';
-  if (book.key) {
+  if (book.gb_description) {
+    desc = book.gb_description;
+  } else if (book.key) {
     try {
       const res = await fetch(`${CORS_PROXY}${encodeURIComponent(OL_API + book.key + '.json')}`);
       const data = await res.json();
@@ -351,7 +364,7 @@ async function showBookModal(book, source) {
   }
   document.getElementById('modal-desc').textContent = desc || 'No description available.';
   
-  const isSaved = savedBooks.some(b => b.key === book.key);
+  const isSaved = savedBooks.some(b => b.key === book.key || b.gb_id === book.gb_id);
   const saveBtn = document.getElementById('modal-save-btn');
   saveBtn.textContent = isSaved ? '✓ In Library' : '+ Save to Library';
   saveBtn.onclick = () => toggleSave(book);
@@ -363,9 +376,11 @@ function closeModal() {
   document.getElementById('book-modal').classList.remove('active');
 }
 
-function saveBook(key) {
-  const book = searchResults.find(b => b.key === key) || savedBooks.find(b => b.key === key);
-  if (!book || savedBooks.some(b => b.key === key)) return;
+function saveBook(id) {
+  // Handle both OpenLibrary (key) and Google Books (gb_id) books
+  const book = searchResults.find(b => b.key === id || b.gb_id === id) || savedBooks.find(b => b.key === id || b.gb_id === id);
+  if (!book) return;
+  if (savedBooks.some(b => b.key === book.key || b.gb_id === book.gb_id)) return;
   
   savedBooks.push(book);
   localStorage.setItem('ereader_books', JSON.stringify(savedBooks));
@@ -379,18 +394,18 @@ function saveBook(key) {
   }
 }
 
-function removeBook(key) {
-  savedBooks = savedBooks.filter(b => b.key !== key);
+function removeBook(id) {
+  savedBooks = savedBooks.filter(b => b.key !== id && b.gb_id !== id);
   localStorage.setItem('ereader_books', JSON.stringify(savedBooks));
   renderSavedBooks();
   updateSavedCount();
 }
 
 function toggleSave(book) {
-  if (savedBooks.some(b => b.key === book.key)) {
-    removeBook(book.key);
+  if (savedBooks.some(b => b.key === book.key || b.gb_id === book.gb_id)) {
+    removeBook(book.key || book.gb_id);
   } else {
-    saveBook(book.key);
+    saveBook(book.key || book.gb_id);
   }
   closeModal();
 }
