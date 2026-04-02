@@ -458,59 +458,126 @@ function openInReader(book) {
 
 async function loadBookContent(book) {
   const container = document.getElementById('reader-content-inner');
+  const chapterSelect = document.getElementById('chapter-select');
+  const tocList = document.getElementById('toc-list');
+  
+  // Reset chapter data
+  chapters = [];
   
   // Try to get the Internet Archive ID for this book
   let iaId = null;
   if (book.ia && book.ia.length > 0) {
     iaId = book.ia[0];
   } else if (book.cover_edition_key) {
-    // Try to get IA from edition
     try {
       const res = await fetch(`${CORS_PROXY}${encodeURIComponent(OL_API + '/books/' + book.cover_edition_key + '.json')}`);
       const data = await res.json();
       iaId = data.identifiers?.internetarchive?.[0] || data.identifiers?.archiveorg?.[0];
     } catch {}
+  } else if (book.gb_id) {
+    // For Google Books, search Internet Archive
+    try {
+      const iaSearch = await fetch(`https://archive.org/search?q=${encodeURIComponent(book.title + ' ' + (book.author_name?.[0] || ''))}&output=json&rows=1`);
+      const iaData = await iaSearch.json();
+      if (iaData.docs && iaData.docs.length > 0) {
+        iaId = iaData.docs[0].identifier;
+      }
+    } catch {}
   }
   
   if (iaId) {
-    // Use Internet Archive for full text - make it fill available space
-    container.innerHTML = `<iframe src="https://archive.org/embed/${iaId}?output=html" style="width:100%;height:100%;min-height:75vh;border:none;" title="Book reader" allowfullscreen></iframe>`;
+    // Fetch IA metadata for TOC
+    try {
+      const metaRes = await fetch(`${CORS_PROXY}${encodeURIComponent('https://archive.org/metadata/' + iaId)}`);
+      const meta = await metaRes.json();
+      
+      // Build chapters from IA metadata
+      if (meta.table-of-contents) {
+        chapters = meta.table-of-contents.map((item, i) => ({
+          title: item.title || `Section ${i + 1}`,
+          page: item.page || null,
+          href: item.href || null
+        }));
+      }
+    } catch {}
+    
+    // Populate chapter select dropdown
+    if (chapters.length > 0) {
+      chapterSelect.innerHTML = '<option value="">-- Select Chapter --</option>';
+      chapters.forEach((ch, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = ch.title;
+        chapterSelect.appendChild(opt);
+      });
+      
+      tocList.innerHTML = '';
+      chapters.forEach((ch, i) => {
+        const div = document.createElement('div');
+        div.className = 'toc-item';
+        div.textContent = ch.title;
+        div.onclick = () => goToChapter(i);
+        tocList.appendChild(div);
+      });
+    } else {
+      chapterSelect.innerHTML = '<option value="">No chapters available</option>';
+      tocList.innerHTML = '<p style="color:#888;font-size:0.85rem;">Use IA viewer controls to navigate</p>';
+    }
+    
+    // Use Internet Archive for full text
+    container.innerHTML = `<iframe id="book-iframe" src="https://archive.org/embed/${iaId}?output=html" style="width:100%;height:100%;min-height:75vh;border:none;" title="Book reader" allowfullscreen></iframe>`;
     document.getElementById('page-indicator').textContent = '';
     document.getElementById('page-status').textContent = 'Internet Archive controls active';
     document.getElementById('page-input').style.display = 'none';
     document.querySelector('.page-nav').style.display = 'none';
   } else {
     // Fallback: Try OpenLibrary's read preview
-    container.innerHTML = '<div class="loading"><p>Loading preview...</p></div>';
+    chapterSelect.innerHTML = '<option value="">No chapters available</option>';
+    tocList.innerHTML = '<p style="color:#888;font-size:0.85rem;">No full text available</p>';
+    
+    container.innerHTML = '<div class="placeholder-book"><p style="font-size:3rem;margin-bottom:1rem;">📖</p><h3>Preview Not Available</h3><p style="color:#888;">This book doesn\'t have a full preview available.</p><button onclick="window.open(\'https://openlibrary.org' + (book.key || '') + '\',\'_blank\')">View on OpenLibrary</button></div>';
     
     try {
-      // Get work details for preview
-      const workRes = await fetch(`${CORS_PROXY}${encodeURIComponent(OL_API + book.key + '.json')}`);
-      const workData = await workRes.json();
-      
-      // Check for first representative edition with full text
-      if (workData.excerpts && workData.excerpts.length > 0) {
-        container.innerHTML = workData.excerpts.map(e => `<p>${e.text}</p>`).join('');
-        totalPages = Math.ceil(workData.excerpts.length / 3);
-      } else {
-        // Show book info and links to external reader
-        container.innerHTML = `
-          <div style="text-align:center;padding:2rem;">
-            <p style="font-size:3rem;margin-bottom:1rem;">📖</p>
-            <h3 style="color:#e94560;margin-bottom:1rem;">Preview Not Available</h3>
-            <p style="color:#888;margin-bottom:2rem;">This book doesn't have a full preview available in OpenLibrary.</p>
-            <p style="color:#888;margin-bottom:1rem;">Try these options:</p>
-            <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
-              <button onclick="window.open('https://openlibrary.org${book.key}','_blank')" style="background:#e94560;color:#fff;border:none;padding:0.75rem 1.5rem;border-radius:8px;cursor:pointer;">View on OpenLibrary</button>
-              <button onclick="searchInternetArchive('${book.title} ${book.author_name ? book.author_name[0] : ''}')" style="background:#0f3460;color:#fff;border:none;padding:0.75rem 1.5rem;border-radius:8px;cursor:pointer;">Search Internet Archive</button>
-            </div>
-          </div>
-        `;
+      if (book.key) {
+        const workRes = await fetch(`${CORS_PROXY}${encodeURIComponent(OL_API + book.key + '.json')}`);
+        const workData = await workRes.json();
+        if (workData.excerpts && workData.excerpts.length > 0) {
+          container.innerHTML = workData.excerpts.map(e => `<p>${e.text}</p>`).join('');
+          totalPages = Math.ceil(workData.excerpts.length / 3);
+        }
       }
-    } catch (err) {
-      container.innerHTML = '<div class="empty-state"><h3>Could not load book</h3><p>Please try searching Internet Archive instead.</p></div>';
-    }
+    } catch {}
+    
+    document.getElementById('page-indicator').textContent = '';
+    document.getElementById('page-status').textContent = 'Preview only';
+    document.getElementById('page-input').style.display = 'none';
+    document.querySelector('.page-nav').style.display = 'none';
   }
+}
+
+function goToChapter(index) {
+  const ch = chapters[index];
+  if (!ch) return;
+  
+  const iframe = document.getElementById('book-iframe');
+  if (!iframe) return;
+  
+  // Try to navigate IA iframe to specific page
+  if (ch.page) {
+    // IA pages - try using #page/ parameter
+    iframe.src = `https://archive.org/embed/${getIaIdFromUrl(iframe.src)}?output=html#page/panorama/${ch.page}`;
+    // Also update TOC active state
+    document.querySelectorAll('.toc-item').forEach((el, i) => {
+      el.classList.toggle('active', i === index);
+    });
+  } else if (ch.href) {
+    iframe.contentWindow.postMessage({ type: 'navigate', href: ch.href }, '*');
+  }
+}
+
+function getIaIdFromUrl(url) {
+  const match = url.match(/archive\.org\/embed\/([^?]+)/);
+  return match ? match[1] : null;
 }
 
 function searchInternetArchive(query) {
