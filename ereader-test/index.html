@@ -64,8 +64,13 @@
     .toc-item.active { background: #e94560; color: #fff; }
     
     /* Book Content Area */
-    .reader-content { flex: 1; overflow-y: auto; background: #0f0f1a; display: flex; align-items: flex-start; justify-content: center; }
-    .reader-content-inner { max-width: 800px; width: 100%; padding: 2rem; line-height: 1.8; font-size: 1.1rem; }
+    .reader-content { flex: 1; overflow-y: auto; background: #0f0f1a; display: flex; align-items: stretch; justify-content: center; }
+    .reader-content-inner { max-width: 900px; width: 100%; padding: 1rem; line-height: 1.8; font-size: 1.1rem; }
+    .reader-content-inner iframe { width: 100%; height: 100%; min-height: 70vh; border: none; border-radius: 8px; }
+    .reader-content-inner .book-cover-full { width: 100%; max-width: 500px; display: block; margin: 2rem auto; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+    .reader-content-inner .placeholder-book { text-align: center; padding: 3rem; }
+    .reader-content-inner .placeholder-book h3 { color: #e94560; margin-bottom: 1rem; }
+    .reader-content-inner .placeholder-book button { background: #e94560; color: #fff; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; margin-top: 1rem; }
     .reader-content-inner p { margin-bottom: 1rem; }
     
     /* Page Navigation */
@@ -300,7 +305,8 @@ function renderSearchResults() {
 }
 
 function createBookCard(book, source) {
-  const isSaved = savedBooks.some(b => b.key === book.key || b.gb_id === book.gb_id);
+  const bookId = getBookId(book);
+  const isSaved = savedBooks.some(b => getBookId(b) === bookId);
   let coverUrl = null;
   if (book.cover_i) {
     coverUrl = `${OL_COVER}/id/${book.cover_i}-M.jpg`;
@@ -323,8 +329,8 @@ function createBookCard(book, source) {
       ${book.first_publish_year ? `<div class="book-author">First published: ${book.first_publish_year}</div>` : ''}
       <div class="book-actions" onclick="event.stopPropagation()">
         ${source === 'saved' 
-          ? `<button class="btn-remove" onclick="removeBook('${book.key || book.gb_id}')">✕ Remove</button>`
-          : `<button class="btn-save" onclick="saveBook('${book.key || book.gb_id}')">${isSaved ? '✓ Saved' : '+ Save'}</button>`
+          ? `<button class="btn-remove" onclick="removeBook('${bookId}')">✕ Remove</button>`
+          : `<button class="btn-save" onclick="saveBook('${bookId}')">${isSaved ? '✓ Saved' : '+ Save'}</button>`
         }
       </div>
     </div>
@@ -364,7 +370,7 @@ async function showBookModal(book, source) {
   }
   document.getElementById('modal-desc').textContent = desc || 'No description available.';
   
-  const isSaved = savedBooks.some(b => b.key === book.key || b.gb_id === book.gb_id);
+  const isSaved = savedBooks.some(b => getBookId(b) === getBookId(book));
   const saveBtn = document.getElementById('modal-save-btn');
   saveBtn.textContent = isSaved ? '✓ In Library' : '+ Save to Library';
   saveBtn.onclick = () => toggleSave(book);
@@ -376,11 +382,18 @@ function closeModal() {
   document.getElementById('book-modal').classList.remove('active');
 }
 
+// Helper to get unique book ID
+function getBookId(book) {
+  return book.key || book.gb_id || null;
+}
+
 function saveBook(id) {
   // Handle both OpenLibrary (key) and Google Books (gb_id) books
-  const book = searchResults.find(b => b.key === id || b.gb_id === id) || savedBooks.find(b => b.key === id || b.gb_id === id);
+  const book = searchResults.find(b => getBookId(b) === id) || savedBooks.find(b => getBookId(b) === id);
   if (!book) return;
-  if (savedBooks.some(b => b.key === book.key || b.gb_id === book.gb_id)) return;
+  
+  const bookId = getBookId(book);
+  if (savedBooks.some(b => getBookId(b) === bookId)) return;
   
   savedBooks.push(book);
   localStorage.setItem('ereader_books', JSON.stringify(savedBooks));
@@ -395,17 +408,18 @@ function saveBook(id) {
 }
 
 function removeBook(id) {
-  savedBooks = savedBooks.filter(b => b.key !== id && b.gb_id !== id);
+  savedBooks = savedBooks.filter(b => getBookId(b) !== id);
   localStorage.setItem('ereader_books', JSON.stringify(savedBooks));
   renderSavedBooks();
   updateSavedCount();
 }
 
 function toggleSave(book) {
-  if (savedBooks.some(b => b.key === book.key || b.gb_id === book.gb_id)) {
-    removeBook(book.key || book.gb_id);
+  const bookId = getBookId(book);
+  if (savedBooks.some(b => getBookId(b) === bookId)) {
+    removeBook(bookId);
   } else {
-    saveBook(book.key || book.gb_id);
+    saveBook(bookId);
   }
   closeModal();
 }
@@ -459,10 +473,12 @@ async function loadBookContent(book) {
   }
   
   if (iaId) {
-    // Use Internet Archive for full text
-    container.innerHTML = `<iframe src="https://archive.org/embed/${iaId}?output=html" style="width:100%;height:100%;border:none;" title="Book reader"></iframe>`;
-    document.getElementById('page-indicator').textContent = 'Internet Archive Viewer';
-    document.getElementById('page-status').textContent = 'Viewing via Internet Archive';
+    // Use Internet Archive for full text - make it fill available space
+    container.innerHTML = `<iframe src="https://archive.org/embed/${iaId}?output=html" style="width:100%;height:100%;min-height:75vh;border:none;" title="Book reader" allowfullscreen></iframe>`;
+    document.getElementById('page-indicator').textContent = '';
+    document.getElementById('page-status').textContent = 'Internet Archive controls active';
+    document.getElementById('page-input').style.display = 'none';
+    document.querySelector('.page-nav').style.display = 'none';
   } else {
     // Fallback: Try OpenLibrary's read preview
     container.innerHTML = '<div class="loading"><p>Loading preview...</p></div>';
@@ -502,6 +518,10 @@ function searchInternetArchive(query) {
 }
 
 function closeReader() {
+  // Reset reader state
+  document.querySelector('.page-nav').style.display = 'flex';
+  document.getElementById('page-input').style.display = 'block';
+  document.getElementById('reader-content-inner').innerHTML = '<p>Select a book from your library to start reading.</p>';
   showView('library');
   document.querySelectorAll('header nav button')[0].click();
 }
